@@ -1,0 +1,263 @@
+import cv2
+import numpy as np
+from PIL import Image
+from typing import Tuple, Optional
+import tempfile
+import os
+
+
+class SaliencyCropper:
+    """Saliency-aware smart cropping for aspect ratio conversion"""
+    
+    def __init__(self):
+        """Initialize saliency detector"""
+        try:
+            # Use OpenCV's saliency detection
+            self.saliency = cv2.saliency.StaticSaliencySpectralResidual_create()
+            print("Saliency detector initialized")
+        except Exception as e:
+            print(f"Error initializing saliency detector: {e}")
+            self.saliency = None
+    
+    def generate_saliency_map(self, image_path: str) -> Optional[np.ndarray]:
+        """
+        Generate saliency map for an image
+        
+        Args:
+            image_path: Path to image file
+            
+        Returns:
+            np.ndarray: Saliency map or None
+        """
+        if not self.saliency:
+            return None
+        
+        try:
+            image = cv2.imread(image_path)
+            if image is None:
+                return None
+            
+            # Convert to grayscale
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            
+            # Compute saliency map
+            success, saliency_map = self.saliency.computeSaliency(gray)
+            
+            if success:
+                # Normalize to 0-255
+                saliency_map = (saliency_map * 255).astype(np.uint8)
+                return saliency_map
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error generating saliency map: {e}")
+            return None
+    
+    def find_safe_crop_region(
+        self,
+        saliency_map: np.ndarray,
+        target_width: int,
+        target_height: int,
+        original_width: int,
+        original_height: int
+    ) -> Tuple[int, int, int, int]:
+        """
+        Find optimal crop region based on saliency map
+        
+        Args:
+            saliency_map: Saliency map
+            target_width: Target crop width
+            target_height: Target crop height
+            original_width: Original image width
+            original_height: Original image height
+            
+        Returns:
+            Tuple: (x, y, width, height) of crop region
+        """
+        # Calculate maximum possible crop positions
+        max_x = original_width - target_width
+        max_y = original_height - target_height
+        
+        if max_x <= 0 or max_y <= 0:
+            # Image is smaller than target, return full image
+            return (0, 0, original_width, original_height)
+        
+        # Slide window to find region with highest saliency
+        best_score = 0
+        best_x, best_y = 0, 0
+        
+        # Sample positions (not every pixel for efficiency)
+        step_x = max(1, max_x // 20)
+        step_y = max(1, max_y // 20)
+        
+        for y in range(0, max_y + 1, step_y):
+            for x in range(0, max_x + 1, step_x):
+                # Extract region from saliency map
+                region = saliency_map[y:y+target_height, x:x+target_width]
+                
+                # Calculate average saliency in region
+                score = np.mean(region)
+                
+                if score > best_score:
+                    best_score = score
+                    best_x, best_y = x, y
+        
+        return (best_x, best_y, target_width, target_height)
+    
+    def smart_crop(
+        self,
+        image_path: str,
+        target_aspect_ratio: str = "9:16",
+        output_path: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Smart crop image to target aspect ratio using saliency detection
+        
+        Args:
+            image_path: Path to input image
+            target_aspect_ratio: Target aspect ratio (e.g., "9:16", "1:1", "16:9")
+            output_path: Path to save cropped image (if None, creates temp file)
+            
+        Returns:
+            str: Path to cropped image or None
+        """
+        try:
+            # Parse aspect ratio
+            if target_aspect_ratio == "9:16":
+                target_ratio = 9/16
+            elif target_aspect_ratio == "1:1":
+                target_ratio = 1.0
+            elif target_aspect_ratio == "16:9":
+                target_ratio = 16/9
+            else:
+                target_ratio = 9/16  # Default to vertical
+            
+            # Load image
+            image = cv2.imread(image_path)
+            if image is None:
+                return None
+            
+            h, w = image.shape[:2]
+            current_ratio = w / h
+            
+            # Generate saliency map
+            saliency_map = self.generate_saliency_map(image_path)
+            
+            if saliency_map is None:
+                # Fallback to center crop
+                saliency_map = np.ones((h, w), dtype=np.uint8) * 128
+            
+            # Calculate target dimensions
+            if current_ratio > target_ratio:
+                # Image is wider than target - crop width
+                target_height = h
+                target_width = int(h * target_ratio)
+            else:
+                # Image is taller than target - crop height
+                target_width = w
+                target_height = int(w / target_ratio)
+            
+            # Find optimal crop region
+            x, y, crop_w, crop_h = self.find_safe_crop_region(
+                saliency_map,
+                target_width,
+                target_height,
+                w,
+                h
+            )
+            
+            # Crop image
+            cropped = image[y:y+crop_h, x:x+crop_w]
+            
+            # Save output
+            if output_path is None:
+                output_path = tempfile.mktemp(suffix='.jpg')
+            
+            cv2.imwrite(output_path, cropped)
+            
+            return output_path
+            
+        except Exception as e:
+            print(f"Error in smart crop: {e}")
+            return None
+    
+    def crop_to_square(self, image_path: str, output_path: Optional[str] = None) -> Optional[str]:
+        """Smart crop to square (1:1) aspect ratio"""
+        return self.smart_crop(image_path, "1:1", output_path)
+    
+    def crop_to_vertical(self, image_path: str, output_path: Optional[str] = None) -> Optional[str]:
+        """Smart crop to vertical (9:16) aspect ratio for stories"""
+        return self.smart_crop(image_path, "9:16", output_path)
+    
+    def crop_to_landscape(self, image_path: str, output_path: Optional[str] = None) -> Optional[str]:
+        """Smart crop to landscape (16:9) aspect ratio"""
+        return self.smart_crop(image_path, "16:9", output_path)
+    
+    def batch_crop_assets(
+        self,
+        assets: list,
+        target_aspect_ratio: str = "9:16"
+    ) -> list:
+        """
+        Batch crop multiple assets
+        
+        Args:
+            assets: List of asset dictionaries with s3_key
+            target_aspect_ratio: Target aspect ratio
+            
+        Returns:
+            list: Updated assets with cropped variant info
+        """
+        from app.services.s3_service import s3_service
+        
+        for asset in assets:
+            try:
+                # Download image
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    input_path = temp_file.name
+                
+                s3_service.s3_client.download_file(
+                    s3_service.bucket,
+                    asset["s3_key"],
+                    input_path
+                )
+                
+                # Smart crop
+                cropped_path = self.smart_crop(input_path, target_aspect_ratio)
+                
+                if cropped_path:
+                    # Upload cropped version
+                    cropped_key = f"sessions/{asset['session_id']}/cropped/{os.path.basename(asset['s3_key'])}"
+                    s3_service.s3_client.upload_file(
+                        cropped_path,
+                        s3_service.bucket,
+                        cropped_key
+                    )
+                    
+                    # Add to asset transformations
+                    if "transformations" not in asset:
+                        asset["transformations"] = {}
+                    if "cropped_variants" not in asset["transformations"]:
+                        asset["transformations"]["cropped_variants"] = []
+                    
+                    asset["transformations"]["cropped_variants"].append({
+                        "aspect_ratio": target_aspect_ratio,
+                        "s3_key": cropped_key,
+                        "s3_url": s3_service.get_file_url(cropped_key)
+                    })
+                
+                # Clean up
+                if os.path.exists(input_path):
+                    os.unlink(input_path)
+                if cropped_path and os.path.exists(cropped_path):
+                    os.unlink(cropped_path)
+                    
+            except Exception as e:
+                print(f"Error cropping asset {asset.get('_id')}: {e}")
+        
+        return assets
+
+
+# Singleton instance
+saliency_cropper = SaliencyCropper()
