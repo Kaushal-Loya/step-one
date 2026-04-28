@@ -142,27 +142,3 @@ class MetadataExtractor:
                 "format": "unknown"
             }
     
-    @staticmethod
-    def extract_from_s3(s3_key: str, s3_service, download_path: str) -> Dict:
-        """Download file from S3 and extract metadata"""
-        try:
-            # Download file
-            s3_service.s3_client.download_file(
-                s3_service.bucket,
-                s3_key,
-                download_path
-            )
-            
-            # Determine file type and extract metadata
-            file_ext = os.path.splitext(download_path)[1].lower()
-            
-            if file_ext in ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']:
-                return MetadataExtractor.extract_image_metadata(download_path)
-            elif file_ext in ['.mp4', '.mov', '.avi', '.mkv']:
-                return MetadataExtractor.extract_video_metadata(download_path)
-            else:
-                return {}
-                
-        except Exception as e:
-            print(f"Error extracting metadata from S3: {e}")
-            return {}

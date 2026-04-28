@@ -203,55 +203,38 @@ class SaliencyCropper:
         Batch crop multiple assets
         
         Args:
-            assets: List of asset dictionaries with s3_key
+            assets: List of asset dictionaries with path
             target_aspect_ratio: Target aspect ratio
             
         Returns:
             list: Updated assets with cropped variant info
         """
-        from app.services.s3_service import s3_service
-        
         for asset in assets:
             try:
-                # Download image
-                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                    input_path = temp_file.name
-                
-                s3_service.s3_client.download_file(
-                    s3_service.bucket,
-                    asset["s3_key"],
-                    input_path
-                )
+                input_path = asset["path"]
                 
                 # Smart crop
-                cropped_path = self.smart_crop(input_path, target_aspect_ratio)
+                output_dir = os.path.dirname(input_path)
+                cropped_filename = f"cropped_{target_aspect_ratio.replace(':', '_')}_{os.path.basename(input_path)}"
+                cropped_path = os.path.join(output_dir, cropped_filename)
                 
-                if cropped_path:
-                    # Upload cropped version
-                    cropped_key = f"sessions/{asset['session_id']}/cropped/{os.path.basename(asset['s3_key'])}"
-                    s3_service.s3_client.upload_file(
-                        cropped_path,
-                        s3_service.bucket,
-                        cropped_key
-                    )
-                    
+                result_path = self.smart_crop(input_path, target_aspect_ratio, cropped_path)
+                
+                if result_path:
                     # Add to asset transformations
                     if "transformations" not in asset:
                         asset["transformations"] = {}
                     if "cropped_variants" not in asset["transformations"]:
                         asset["transformations"]["cropped_variants"] = []
                     
+                    # Assume URL can be derived from path
+                    asset_url = f"/outputs/{os.path.relpath(result_path, 'outputs')}"
+                    
                     asset["transformations"]["cropped_variants"].append({
                         "aspect_ratio": target_aspect_ratio,
-                        "s3_key": cropped_key,
-                        "s3_url": s3_service.get_file_url(cropped_key)
+                        "path": result_path,
+                        "url": asset_url
                     })
-                
-                # Clean up
-                if os.path.exists(input_path):
-                    os.unlink(input_path)
-                if cropped_path and os.path.exists(cropped_path):
-                    os.unlink(cropped_path)
                     
             except Exception as e:
                 print(f"Error cropping asset {asset.get('_id')}: {e}")

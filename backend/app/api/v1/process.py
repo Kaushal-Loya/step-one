@@ -128,11 +128,11 @@ async def run_processing(dataset_name: str, session_id: str, dataset_path: Path)
         status["status"] = "completed"
         status["progress"] = 100
         status["outputs"] = {
-            "linkedin_collage": str(collage_path),
+            "linkedin_collage": str(collage_path) if collage_path else None,
             "linkedin_caption": copies.get("linkedin", ""),
             "instagram_caption": copies.get("instagram", ""),
-            "stories": stories,
-            "case_study": str(case_study_path)
+            "stories": [str(s) for s in stories] if stories else [],
+            "case_study": str(case_study_path) if case_study_path else None
         }
         with open(status_file, 'w') as f:
             json.dump(status, f)

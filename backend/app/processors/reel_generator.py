@@ -265,66 +265,6 @@ class ReelGenerator:
             print(f"Error adding text overlay: {e}")
             return None
     
-    def create_reel_from_s3(
-        self,
-        asset_keys: List[str],
-        session_id: str,
-        s3_service,
-        duration: float = 30.0
-    ) -> Optional[str]:
-        """
-        Create reel from S3 assets
-        
-        Args:
-            asset_keys: List of S3 keys for video assets
-            session_id: Session ID
-            s3_service: S3 service instance
-            duration: Target duration
-            
-        Returns:
-            str: S3 key of generated reel or None
-        """
-        try:
-            # Download videos
-            video_paths = []
-            for key in asset_keys[:10]:  # Max 10 clips
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
-                    temp_path = temp_file.name
-                    video_paths.append(temp_path)
-                
-                s3_service.s3_client.download_file(
-                    s3_service.bucket,
-                    key,
-                    temp_path
-                )
-            
-            # Create reel
-            reel_path = self.create_reel(video_paths, duration=duration)
-            
-            if reel_path:
-                # Upload to S3
-                reel_key = f"sessions/{session_id}/reels/instagram_reel.mp4"
-                s3_service.s3_client.upload_file(
-                    reel_path,
-                    s3_service.bucket,
-                    reel_key,
-                    ExtraArgs={'ContentType': 'video/mp4'}
-                )
-                
-                # Clean up
-                for path in video_paths:
-                    if os.path.exists(path):
-                        os.unlink(path)
-                if os.path.exists(reel_path):
-                    os.unlink(reel_path)
-                
-                return reel_key
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error creating reel from S3: {e}")
-            return None
     
     def extract_highlights(
         self,

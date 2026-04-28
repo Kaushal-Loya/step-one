@@ -13,13 +13,6 @@ class Settings(BaseSettings):
     mongodb_db: str = "stepone_ai"
     redis_url: str = "redis://localhost:6379/0"
     
-    # AWS/S3
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
-    aws_region: str = "us-east-1"
-    s3_bucket: str = "stepone-media"
-    s3_bucket_cdn: str = "stepone-media-cdn"
-    
     # AI APIs
     gemini_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
