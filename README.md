@@ -1,4 +1,4 @@
-# StepOne AI - Content & Design Engine
+# StepOne Buildathon - Content & Design Engine
 
 AI-powered automated content generation for experiential marketing events.
 
@@ -142,4 +142,4 @@ Frontend runs on http://localhost:3000
 
 ## License
 
-Proprietary - StepOne AI Buildathon 2026
+Proprietary - StepOne Buildathon 2026
