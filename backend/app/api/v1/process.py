@@ -26,7 +26,9 @@ async def process_dataset(dataset_name: str, background_tasks: BackgroundTasks):
     """Process an event dataset and generate all outputs"""
 
     # Validate dataset exists
-    dataset_path = Path(f"/Users/priyanshnarang/Desktop/stepone-ai/event_datasets/{dataset_name}")
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    dataset_path = project_root / "event_datasets" / dataset_name
+    
     if not dataset_path.exists():
         raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
 

@@ -35,7 +35,7 @@ const TABS = ['all', 'collages', 'stories', 'reels', 'docs']
 export default function Outputs() {
   const [searchParams] = useSearchParams()
   const sessionFilter = searchParams.get('session')
-  
+
   const [outputs, setOutputs] = useState<Output[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
@@ -52,18 +52,22 @@ export default function Outputs() {
       .then((data) => {
         const sessions = data.sessions || []
 
-        const requests = sessions.map((session: any) =>
-          apiRequest(`/api/v1/sessions/${session.session_id}/outputs`)
+        const requests = sessions.map((session: any) => {
+          const sid = session.session_id || session._id || session.id
+          if (!sid) return Promise.resolve([])
+          
+          return apiRequest(`/api/v1/sessions/${sid}/outputs`)
             .then((res) =>
               (res.outputs || []).map((o: any) => ({
                 ...o,
+                session_id: o.session_id || sid, // Ensure session_id is always present
                 ratio: o.type === 'story' || o.type === 'reel'
                   ? 'aspect-[9/16]'
                   : 'aspect-video'
               }))
             )
             .catch(() => [])
-        )
+        })
 
         return Promise.allSettled(requests).then((results) =>
           results.flatMap((r: any) => (r.status === 'fulfilled' ? r.value : []))
@@ -94,10 +98,15 @@ export default function Outputs() {
 
   const filtered = useMemo(() => {
     let base = outputs
-    if (sessionFilter) {
-      base = base.filter(o => o.session_id === sessionFilter)
+    // Only filter by session if the query param is actually present and not empty
+    if (sessionFilter && sessionFilter.trim() !== '') {
+      const target = sessionFilter.toLowerCase().trim()
+      base = base.filter(o => {
+        const oid = (o.session_id || '').toLowerCase().trim()
+        return oid === target || oid.includes(target) || target.includes(oid)
+      })
     }
-    
+
     if (activeTab === 'all') return base
     if (activeTab === 'collages') return base.filter(o => o.type === 'collage')
     if (activeTab === 'stories') return base.filter(o => o.type === 'story')
@@ -197,8 +206,8 @@ export default function Outputs() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-5 h-10 rounded-full text-xs font-semibold capitalize transition ${activeTab === tab
-                  ? 'bg-white text-black'
-                  : 'text-white/50 hover:text-white'
+                ? 'bg-white text-black'
+                : 'text-white/50 hover:text-white'
                 }`}
             >
               {tab}
@@ -213,9 +222,27 @@ export default function Outputs() {
           <p className="text-white/40 text-sm">Loading assets...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-32 border border-dashed border-white/10 rounded-2xl">
-          <Layers className="mx-auto h-10 w-10 text-white/20 mb-3" />
-          <p className="text-white text-lg">No {activeTab} found</p>
+        <div className="text-center py-32 border border-dashed border-white/10 rounded-2xl flex flex-col items-center gap-4">
+          <Layers className="h-10 w-10 text-white/20" />
+          <div className="space-y-1">
+            <p className="text-white text-lg font-medium">No {activeTab === 'all' ? 'assets' : activeTab} found for this view</p>
+            {sessionFilter && (
+              <p className="text-white/40 text-xs">Currently filtering by session: <span className="text-amber-500/80 font-mono">{sessionFilter}</span></p>
+            )}
+          </div>
+          {sessionFilter && (
+            <button 
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('session');
+                window.history.pushState({}, '', url);
+                window.location.reload(); // Force reload to clear all states
+              }}
+              className="mt-2 px-6 h-10 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full text-xs font-semibold transition"
+            >
+              Clear Filter & Show All {outputs.length} Assets
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

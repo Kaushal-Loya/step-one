@@ -64,26 +64,6 @@ async def get_text_content(path: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{session_id}")
-async def get_session(session_id: str):
-    """Get session details by ID"""
-    outputs_dir = Path(__file__).parent.parent.parent.parent / "outputs"
-    status_file = outputs_dir / f"{session_id}_status.json"
-
-    if not status_file.exists():
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    with open(status_file, 'r') as f:
-        data = json.load(f)
-
-    return {
-        "_id": session_id,
-        "session_id": session_id,
-        **data,
-        "created_at": datetime.fromtimestamp(status_file.stat().st_mtime).isoformat()
-    }
-
-
 @router.get("/{session_id}/outputs")
 async def get_session_outputs(session_id: str):
     """Get all outputs for a session"""
@@ -138,6 +118,28 @@ async def get_session_outputs(session_id: str):
                 "url": f"/outputs/reels/{reel.name}",
                 "created_at": datetime.fromtimestamp(reel.stat().st_mtime).isoformat()
             })
+
+    return {"outputs": outputs}
+
+@router.get("/{session_id}")
+async def get_session(session_id: str):
+    """Get session details by ID"""
+    outputs_dir = Path(__file__).parent.parent.parent.parent / "outputs"
+    status_file = outputs_dir / f"{session_id}_status.json"
+
+    if not status_file.exists():
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    with open(status_file, 'r') as f:
+        data = json.load(f)
+
+    return {
+        "_id": session_id,
+        "session_id": session_id,
+        **data,
+        "created_at": datetime.fromtimestamp(status_file.stat().st_mtime).isoformat()
+    }
+
 
 from fastapi.responses import FileResponse
 import shutil
